@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+<!DOCTYPE nzb PUBLIC "-//newzBin//DTD NZB 1.0//EN" "http://www.newzbin.com/DTD/nzb/nzb-1.0.dtd">
+<nzb xmlns="http://www.newzbin.com/DTD/2003/nzb"><file poster="CPP-gebruiker@domein.nl (CPP-Gebruiker)" date="1317225589" subject="Colombiana - dutch cover &quot;Colombiana - dutch cover.rar&quot; yEnc (1/3)">
+    <groups>
+      <group>alt.binaries.misc</group>
+    </groups>
+    <segments>
+      <segment bytes="384000" number="1">part1of3.PQQ5maOv3uYBKJofKxZ7@camelsystem-powerpost.local</segment>
+      <segment bytes="384000" number="2">part2of3.PQQ5maOv3uYBKJofKxZ7@camelsystem-powerpost.local</segment>
+      <segment bytes="45612" number="3">part3of3.PQQ5maOv3uYBKJofKxZ7@camelsystem-powerpost.local</segment>
+    </segments>
+  </file><file poster="CPP-gebruiker@domein.nl (CPP-Gebruiker)" date="1317225589" subject="Colombiana - dutch cover &quot;Colombiana - dutch cover.rar.par2&quot; yEnc (1/1)">
+    <groups>
+      <group>alt.binaries.misc</group>
+    </groups>
+    <segments>
+      <segment bytes="456" number="1">part1of1.G62fnmAbLrcnxS6WO7q3@camelsystem-powerpost.local</segment>
+    </segments>
+  </file><file poster="CPP-gebruiker@domein.nl (CPP-Gebruiker)" date="1317225589" subject="Colombiana - dutch cover &quot;Colombiana - dutch cover.rar.vol0+1.PAR2&quot; yEnc (1/2)">
+    <groups>
+      <group>alt.binaries.misc</group>
+    </groups>
+    <segments>
+      <segment bytes="384068" number="1">part1of2.tH9lB3WXJ9U8j3ZyVLjB@camelsystem-powerpost.local</segment>
+      <segment bytes="456" number="2">part2of2.tH9lB3WXJ9U8j3ZyVLjB@camelsystem-powerpost.local</segment>
+    </segments>
+  </file><file poster="CPP-gebruiker@domein.nl (CPP-Gebruiker)" date="1317225589" subject="Colombiana - dutch cover &quot;Colombiana - dutch cover.rar.vol1+2.PAR2&quot; yEnc (1/3)">
+    <groups>
+      <group>alt.binaries.misc</group>
+    </groups>
+    <segments>
+      <segment bytes="384068" number="1">part1of3.18dtL1y7vA92oumq9S&amp;Y@camelsystem-powerpost.local</segment>
+      <segment bytes="384068" number="2">part2of3.18dtL1y7vA92oumq9S&amp;Y@camelsystem-powerpost.local</segment>
+      <segment bytes="836" number="3">part3of3.18dtL1y7vA92oumq9S&amp;Y@camelsystem-powerpost.local</segment>
+    </segments>
+  </file></nzb>
+
