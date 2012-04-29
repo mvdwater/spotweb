@@ -941,12 +941,7 @@ echo $query;
 		# je hebt de zoek criteria (category, titel, etc)
 		$criteriaFilter = " WHERE (bl.spotterid IS NULL) ";
 		if (!empty($parsedSearch['filter'])) {
-			# sqlite doesnt support MATCH and OR together, check and fix this
-			if ($this->_dbsettings['engine'] == 'pdo_sqlite' && strpos($parsedSearch['filter'], 'MATCH') && strpos($parsedSearch['filter'], 'OR') ) {
-				$criteriaFilter .= ' AND ' . str_replace('OR', 'AND', $parsedSearch['filter']);
-			} else {
-				$criteriaFilter .= ' AND ' . $parsedSearch['filter'];
-			} # if 
+			$criteriaFilter .= ' AND ' . $parsedSearch['filter'];
 		} # if 
 
 		# er kunnen ook nog additionele velden gevraagd zijn door de filter parser
