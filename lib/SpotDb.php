@@ -772,7 +772,6 @@ class SpotDb {
 						LEFT JOIN spotstatelist AS l ON s.messageid = l.messageid
 						LEFT JOIN spotteridblacklist as bl ON ((bl.spotterid = s.spotterid) AND (bl.ouruserid = -1) AND (bl.idtype = 1))
 						WHERE " . $sqlFilter . " AND (bl.spotterid IS NULL)";
-echo $query;
 		} # else
 		$cnt = $this->_conn->singleQuery($query);
 		SpotTiming::stop(__FUNCTION__, array($parsedSearch));
