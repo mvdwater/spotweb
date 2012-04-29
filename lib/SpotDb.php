@@ -423,8 +423,8 @@ class SpotDb {
 								COALESCE(MAX(ss.lasthit), MAX(u.lastvisit)) AS lastvisit,
 								MAX(ipaddr) AS lastipaddr
 							FROM users AS u
-							LEFT JOIN sessions ss ON (u.id = ss.userid)
-							WHERE (DELETED = '%s')
+							LEFT JOIN (SELECT userid, lasthit, ipaddr FROM sessions WHERE sessions.userid = userid ORDER BY lasthit) AS ss ON (u.id = ss.userid)
+							WHERE (deleted = '%s')
 							GROUP BY u.id, u.username", array($this->bool2dt(false)));
 
 		SpotTiming::stop(__FUNCTION__, array());
@@ -2215,8 +2215,7 @@ class SpotDb {
 	 */
 	function markFilterCountAsSeen($userId) {
 		switch ($this->_dbsettings['engine']) {
-			case 'pdo_sqlite'	: 
-			case 'pdo_pgsql'	: {
+			case 'pdo_sqlite'	: {
 				$filterList = $this->_conn->arrayQuery("SELECT currentspotcount, lastupdate, filterhash FROM filtercounts WHERE userid = -1", array());
 				foreach($filterList as $filter) {
 					$this->_conn->modify("UPDATE filtercounts
@@ -2234,6 +2233,19 @@ class SpotDb {
 				
 				break;
 			} # pdo_sqlite
+
+			case 'pdo_pgsql'	: {
+				$this->_conn->modify("UPDATE filtercounts AS f
+											SET lastvisitspotcount = o.currentspotcount,
+												currentspotcount = o.currentspotcount,
+												lastupdate = o.lastupdate
+											FROM filtercounts AS o
+											WHERE (f.filterhash = o.filterhash) 
+											  AND (f.userid = %d) AND (o.userid = %d)",
+								Array((int) $userId, (int) $userid));
+
+				break;
+			} # pdo_pgsql
 
 			default				: {
 				 $this->_conn->modify("UPDATE filtercounts f, filtercounts t
