@@ -12,7 +12,7 @@ class dbfts_sqlite extends dbfts_abs {
 		 * Initialize some basic values which are used as return values to
 		 * make sure always return a valid set
 		 */
-		$filterValueSql = array('(idx_fts_spots.rowid = s.rowid)');
+		$filterValueSql = array();
 		$additionalTables = array('idx_fts_spots');
 		$matchList = array();
 
@@ -37,7 +37,8 @@ class dbfts_sqlite extends dbfts_abs {
 		} # foreach
 		
 		# add one WHERE MATCH conditions with all conditions
-		$filterValueSql[] = " (idx_fts_spots MATCH '" . implode(' ', $matchList) . "') ";
+		# always use AND with FTS and MATCH (sqlite limitation)
+		$filterValueSql[] = "(idx_fts_spots.rowid = s.rowid) AND (idx_fts_spots MATCH '" . implode(' ', $matchList) . "') ";
 		
 		SpotTiming::stop(__FUNCTION__, array($filterValueSql,$additionalTables));
 
