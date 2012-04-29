@@ -754,19 +754,27 @@ class SpotDb {
 	/**
 	 * Geef het aantal spots terug dat er op dit moment in de db zit
 	 */
-	function getSpotCount($sqlFilter) {
+	function getSpotCount($parsedSearch) {
 		SpotTiming::start(__FUNCTION__);
-		if (empty($sqlFilter)) {
+		if (empty($parsedSearch)) {
 			$query = "SELECT COUNT(1) FROM spots AS s";
 		} else {
+			$sqlFilter = $parsedSearch['filter'];
+			# ook additionele tabellen kunnen gevraagd zijn door de filter parser, die 
+			# moeten we dan ook toevoegen
+			$additionalTableList = '';
+			foreach($parsedSearch['additionalTables'] as $additionalTable) {
+				$additionalTableList = ', ' . $additionalTable . $additionalTableList;
+			} # foreach
 			$query = "SELECT COUNT(1) FROM spots AS s 
+						$additionalTableList
 						LEFT JOIN spotsfull AS f ON s.messageid = f.messageid
 						LEFT JOIN spotstatelist AS l ON s.messageid = l.messageid
 						LEFT JOIN spotteridblacklist as bl ON ((bl.spotterid = s.spotterid) AND (bl.ouruserid = -1) AND (bl.idtype = 1))
 						WHERE " . $sqlFilter . " AND (bl.spotterid IS NULL)";
 		} # else
 		$cnt = $this->_conn->singleQuery($query);
-		SpotTiming::stop(__FUNCTION__, array($sqlFilter));
+		SpotTiming::stop(__FUNCTION__, array($parsedSearch));
 		if ($cnt == null) {
 			return 0;
 		} else {
