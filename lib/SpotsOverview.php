@@ -260,7 +260,7 @@ class SpotsOverview {
 			 * And convert the parsed system to an SQL statement and actually run it
 			 */
 			$parsedSearch = $this->filterToQuery($query_params['search'], array(), $userSession, array());
-			$spotCount = $this->_db->getSpotCount($parsedSearch['filter']);
+			$spotCount = $this->_db->getSpotCount($parsedSearch);
 
 			/*
 			 * Because we only ask for new spots, just increase the current
