@@ -772,6 +772,7 @@ class SpotDb {
 						LEFT JOIN spotstatelist AS l ON s.messageid = l.messageid
 						LEFT JOIN spotteridblacklist as bl ON ((bl.spotterid = s.spotterid) AND (bl.ouruserid = -1) AND (bl.idtype = 1))
 						WHERE " . $sqlFilter . " AND (bl.spotterid IS NULL)";
+echo $query;
 		} # else
 		$cnt = $this->_conn->singleQuery($query);
 		SpotTiming::stop(__FUNCTION__, array($parsedSearch));
@@ -940,7 +941,12 @@ class SpotDb {
 		# je hebt de zoek criteria (category, titel, etc)
 		$criteriaFilter = " WHERE (bl.spotterid IS NULL) ";
 		if (!empty($parsedSearch['filter'])) {
-			$criteriaFilter .= ' AND ' . $parsedSearch['filter'];
+			# sqlite doesnt support MATCH and OR together, check and fix this
+			if ($this->_dbsettings['engine'] == 'pdo_sqlite' && strpos($parsedSearch['filter'], 'MATCH') && strpos($parsedSearch['filter'], 'OR') ) {
+				$criteriaFilter .= ' AND ' . str_replace('OR', 'AND', $parsedSearch['filter']);
+			} else {
+				$criteriaFilter .= ' AND ' . $parsedSearch['filter'];
+			} # if 
 		} # if 
 
 		# er kunnen ook nog additionele velden gevraagd zijn door de filter parser
