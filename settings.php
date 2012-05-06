@@ -1,14 +1,4 @@
 <?php
-# db
-$settings['db']['engine'] = 'mysql';				# <== keuze uit pdo_pgsql, mysql en pdo_mysql
-$settings['db']['host'] = 'localhost';
-$settings['db']['dbname'] = 'spotweb';
-$settings['db']['user'] = 'spotweb';
-$settings['db']['pass'] = 'spotweb';
-
-# Als je sqlite wilt gebruiken, vul dan onderstaande in
-#$settings['db']['engine'] = 'pdo_sqlite'; 			# <== keuze uit pdo_sqlite, pdo_pgsql, mysql en pdo_mysql
-#$settings['db']['path'] = './nntpdb.sqlite3';	# <== als je geen SQLite3 gebruikt, kan dit weg	
 
 # Waar is SpotWeb geinstalleerd (voor de buitenwereld), deze link is nodig voor zaken als de RSS feed en de 
 # sabnzbd integratie. Let op de afsluitende slash "/"!
@@ -29,13 +19,6 @@ $settings['openssl_cnf_path'] = "lib/openssl/openssl.cnf";
 $settings['templates']['autodetect'] = true;
 $settings['templates']['default'] = 'we1rdo';
 $settings['templates']['mobile'] = 'mobile';
-
-# Als er een nieuwe user aangemaakt wordt, tot welke groepen maken we deze
-# dan standaard lid? 
-$settings['newuser_grouplist'] = array(
-		Array('groupid' => 2, 'prio' => 1),
-		Array('groupid' => 3, 'prio' => 2)
-	);
 
 # Cookie host
 if (isset($_SERVER['HTTP_HOST'])) {
@@ -87,13 +70,6 @@ $settings['sabnzbd']['categories'] = Array(
 					 'a15'		=> 'pda')
 	);
 					 
-# Als een user niet expliciet geauthenticeerd is, dan wordt deze user standaard ingelogged
-# met een userid van 1 -- dit is de builtin anonymous user. Als je je Spotweb installatie
-# helemaal alleen gebruikt, kan je dit eventueel laten herleiden naar een andere user zodat
-# je Spotweb volledig kan gebruiken (inclusief posten van comments en dergelijke) zonder
-# dat je ooit hoeft in te loggen.
-$settings['nonauthenticated_userid'] = 1;
-
 #
 # Include eventueel eigen settings, dit is ook een PHP file. 
 # Settings welke hierin staan zullen de instellingen van deze file overiden.
@@ -160,7 +136,7 @@ $array = array('blacklist_url', 'cookie_expires', 'deny_robots', 'enable_stacktr
 	'nntp_nzb', 'nntp_post', 'prefetch_image', 'prefetch_nzb', 'retention', 'retrieve_comments', 'retrieve_full', 'retrieve_full_comments', 
 	'retrieve_increment', 'retrieve_newer_than', 'retrieve_reports', 'sendwelcomemail', 'spot_moderation', 'allow_user_template', 
 	'auto_markasread', 'filters', 'index_filter', 'keep_downloadlist', 'keep_watchlist', 'nzb_search_engine', 'nzbhandling', 'show_multinzb',
-	'count_newspots', 'keep_seenlist', 'show_nzbbutton', 'show_updatebutton');
+	'count_newspots', 'keep_seenlist', 'show_nzbbutton', 'show_updatebutton', 'newuser_grouplist', 'nonauthenticated_userid');
 foreach ($array as $value) {
 	if (isset($settings[$value])) {
 		$ownsettingserror .= ' * ' . $value . PHP_EOL;
@@ -191,3 +167,24 @@ foreach($settings['quicklinks'] as $link) {
 		throw new InvalidOwnSettingsSettingException("Quicklinks have to have a preferences check as well. Please modify the quickinks in your ownettings.php or remove them from your ownsetings.php");
 	} # if
 } # foreach
+
+/*
+ * First make sure no database settings are left in the main ownsettings.php anymore, as this is the first
+ * part to deprecating the kludge that settings.php has become completely.
+ */
+if (!empty($settings['db'])) {
+		throw new InvalidOwnSettingsSettingException("You need to remove the database settings from your ownsettings.php file and open install.php from your webbrowser. If you are upgrading, please consult https://github.com/spotweb/spotweb/wiki/Frequently-asked-questions/ first");
+} # if
+
+/*
+ * Allow database settings to be entered in dbsettings.inc.php
+ */
+@include "dbsettings.inc.php";
+if (empty($dbsettings)) {
+		throw new InvalidOwnSettingsSettingException("No databasesettings have been entered, please use the 'install.php' wizard to install and configure Spotweb" . PHP_EOL . 
+									"If you are upgrading from an earlier version of Spotweb, please consult https://github.com/spotweb/spotweb/wiki/Frequently-asked-questions/ first");
+} else {
+	$settings['db'] = $dbsettings;
+} # else
+
+if (file_exists('reallymyownsettings.php')) { include_once('reallymyownsettings.php'); }

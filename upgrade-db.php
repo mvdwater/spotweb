@@ -18,22 +18,32 @@ try {
 	 * will easily be aborted by either a database, apache or browser timeout
 	 */
 	SpotCommandline::initialize(array('reset-groupmembership', 'reset-securitygroups', 'reset-filters'), 
-								array('reset-groupmembership' => false, 'reset-securitygroups' => false, 'reset-filters' => false));
+								array('reset-groupmembership' => false, 'reset-securitygroups' => false, 'reset-filters' => false,
+									  'set-systemtype' => false));
 	if (!SpotCommandline::isCommandline()) {
 		die("upgrade-db.php can only be run from the console, it cannot be run from the web browser");
 	} # if
 
 	echo "Updating schema..(" . $settings['db']['engine'] . ")" . PHP_EOL;
 	
-	$spotUpgrader = new SpotUpgrader($settings['db']);
+	$spotUpgrader = new SpotUpgrader($settings['db'], $settings);
 	$spotUpgrader->database();
 	echo "Schema update done" . PHP_EOL;
 	echo "Updating settings" . PHP_EOL;
-	$spotUpgrader->settings($settings);
+	$spotUpgrader->settings();
 	echo "Settings update done" . PHP_EOL;
 	$spotUpgrader->users($settings);
 	echo "Updating users" . PHP_EOL;
 	echo "Users' update done" . PHP_EOL;
+
+	/* 
+	 * If the user asked to change the system type..
+	 */
+	if (SpotCommandline::get('set-systemtype')) {
+		echo "Resetting the system type of Spotweb to " . SpotCommandline::get('set-systemtype') . PHP_EOL;
+		$spotUpgrader->resetSystemType(SpotCommandline::get('set-systemtype'));
+		echo "System type changed" . PHP_EOL;
+	} # if
 
 	/* If the user asked to reset group membership, reset all group memberships */
 	if (SpotCommandline::get('reset-securitygroups')) {
@@ -73,14 +83,14 @@ catch(SpotwebCannotBeUpgradedToooldException $x) {
 } # SpotwebCannotBeUpgradedToooldException
 
 catch(InvalidOwnSettingsSettingException $x) {
-	echo "There is an error in your ownsettings.php" . PHP_EOL . PHP_EOL;
+	echo "There is an error in your settings. Please open install.php to configure Spotweb" . PHP_EOL . PHP_EOL;
 	echo $x->getMessage() . PHP_EOL;
 } # InvalidOwnSettingsSettingException
 
 catch(Exception $x) {
 	echo PHP_EOL . PHP_EOL;
 	echo 'SpotWeb crashed' . PHP_EOL . PHP_EOL;
-	echo "Database schema of settings upgrade mislukt:" . PHP_EOL;
+	echo "Database schema or settings upgrade failed:" . PHP_EOL;
 	echo "   " . $x->getMessage() . PHP_EOL;
 	echo PHP_EOL . PHP_EOL;
 	echo $x->getTraceAsString();
