@@ -53,7 +53,8 @@ class SpotUserSystem {
 						 'userid' => $userid,
 						 'hitcount' => 1,
 						 'lasthit' => time(),
-						 'ipaddr' => $this->determineUsersIpAddress()
+						 'ipaddr' => $this->determineUsersIpAddress(),
+						 'devicetype' => $this->determineDeviceType()
 						 );
 
 		/*
@@ -61,7 +62,7 @@ class SpotUserSystem {
 		 * don't actually create the db entry for anonymous 
 	 	 * sessions. We can only do this for 'real' anonymous
 	 	 * users because when this is overriden, the new 
-	 	 * anoonymous user might have given additional features
+	 	 * anonymous user might have given additional features
 	 	 */
 		if ($userid != SPOTWEB_ANONYMOUS_USERID) {
 			$this->_db->addSession($session);
@@ -125,6 +126,15 @@ class SpotUserSystem {
 		$spotSec = new SpotSecurity($this->_db, $this->_settings, $userSession['user'], $userSession['session']['ipaddr']);
 		$userSession['security'] = $spotSec;
 		
+		/* 
+		 * Determine the users' template name
+		 */
+		switch($userSession['session']['devicetype']) {
+			case 'mobile'	: $userSession['active_tpl'] = $userSession['user']['prefs']['mobile_template']; break; 
+			case 'tablet'	: $userSession['active_tpl'] = $userSession['user']['prefs']['tablet_template']; break; 
+			default			: $userSession['active_tpl'] = $userSession['user']['prefs']['normal_template']; break; 
+		} # switch
+
 		/*
 		 * And always update the cookie even if one already exists,
 		 * this prevents the cookie from expiring all of a sudden
@@ -135,7 +145,9 @@ class SpotUserSystem {
 	} # useOrStartSession
 
 	/*
-	 * Password to hash
+	 * Password to hash. Duplicated in SpotUserUpgrader
+	 * but we cannot rely on this class always being available
+	 * already
 	 */
 	function passToHash($password) {
 		return sha1(strrev(substr($this->_settings->get('pass_salt'), 1, 3)) . $password . $this->_settings->get('pass_salt'));
@@ -199,6 +211,9 @@ class SpotUserSystem {
 			# Initialize the security system
 			$userRecord['security'] = new SpotSecurity($this->_db, $this->_settings, $userRecord['user'], $this->determineUsersIpAddress() );
 
+			# always use the default template
+			$userRecord['active_tpl'] = $userRecord['user']['prefs']['normal_template'];
+
 			return $userRecord;
 		} else {
 			return false;
@@ -223,7 +238,7 @@ class SpotUserSystem {
 	 * Checks whether an given session is valid. If the session
 	 * is valid, this function returns an userrecord
 	 */
-	function validSession($sessionCookie) {
+	private function validSession($sessionCookie) {
 		$sessionParts = explode(".", $sessionCookie);
 		if (count($sessionParts) != 2) {
 			return false;
@@ -421,7 +436,7 @@ class SpotUserSystem {
 	/* 
 	 * Cleanup of user preferences
 	 */
-	function cleanseUserPreferences($prefs, $tpl) {
+	function cleanseUserPreferences($prefs, $anonSkel, $tmplSkel) {
 		/*
 		 * We do not want any user preferences to be submitted which aren't in the anonuser preferences,
 		 * as this would allow garbage preferences or invalid settings for non-existing preferences.
@@ -432,46 +447,50 @@ class SpotUserSystem {
 		 *
 		 * We solve this by simply setting the values of all the checkboxes and then performing
 		 * a recursive merge
-		 *
-		 * Convert other settings to booleans so we always have a valid result.
-		 * We need to do this because not all browsers post checkboxes in a form in
-		 * the same way.
 		 */
-		$tpl['count_newspots'] = (isset($prefs['count_newspots'])) ? true : false;
-        $tpl['mouseover_subcats'] = (isset($prefs['mouseover_subcats'])) ? true : false;
-		$tpl['keep_seenlist'] = (isset($prefs['keep_seenlist'])) ? true : false;
-		$tpl['auto_markasread'] = (isset($prefs['auto_markasread'])) ? true : false;
-		$tpl['keep_downloadlist'] = (isset($prefs['keep_downloadlist'])) ? true : false;
-		$tpl['keep_watchlist'] = (isset($prefs['keep_watchlist'])) ? true : false;
-		$tpl['show_filesize'] = (isset($prefs['show_filesize'])) ? true : false;
-		$tpl['show_reportcount'] = (isset($prefs['show_reportcount'])) ? true : false;
-		$tpl['show_nzbbutton'] = (isset($prefs['show_nzbbutton'])) ? true : false;
-		$tpl['show_multinzb'] = (isset($prefs['show_multinzb'])) ? true : false;
-		$tpl['show_avatars'] = (isset($prefs['show_avatars'])) ? true : false;
+		$anonSkel['count_newspots'] = (isset($prefs['count_newspots'])) ? true : false;
+        $anonSkel['mouseover_subcats'] = (isset($prefs['mouseover_subcats'])) ? true : false;
+		$anonSkel['keep_seenlist'] = (isset($prefs['keep_seenlist'])) ? true : false;
+		$anonSkel['auto_markasread'] = (isset($prefs['auto_markasread'])) ? true : false;
+		$anonSkel['keep_downloadlist'] = (isset($prefs['keep_downloadlist'])) ? true : false;
+		$anonSkel['keep_watchlist'] = (isset($prefs['keep_watchlist'])) ? true : false;
+		$anonSkel['show_filesize'] = (isset($prefs['show_filesize'])) ? true : false;
+		$anonSkel['show_reportcount'] = (isset($prefs['show_reportcount'])) ? true : false;
+		$anonSkel['show_nzbbutton'] = (isset($prefs['show_nzbbutton'])) ? true : false;
+		$anonSkel['show_multinzb'] = (isset($prefs['show_multinzb'])) ? true : false;
+		$anonSkel['show_avatars'] = (isset($prefs['show_avatars'])) ? true : false;
 		
 		$notifProviders = Notifications_Factory::getActiveServices();
 		foreach ($notifProviders as $notifProvider) {
-			$tpl['notifications'][$notifProvider]['enabled'] = (isset($prefs['notifications'][$notifProvider]['enabled'])) ? true : false;
-			$tpl['notifications'][$notifProvider]['events']['watchlist_handled'] = (isset($prefs['notifications'][$notifProvider]['events']['watchlist_handled'])) ? true : false;
-			$tpl['notifications'][$notifProvider]['events']['nzb_handled'] = (isset($prefs['notifications'][$notifProvider]['events']['nzb_handled'])) ? true : false;
-			$tpl['notifications'][$notifProvider]['events']['retriever_finished'] = (isset($prefs['notifications'][$notifProvider]['events']['retriever_finished'])) ? true : false;
-			$tpl['notifications'][$notifProvider]['events']['report_posted'] = (isset($prefs['notifications'][$notifProvider]['events']['report_posted'])) ? true : false;
-			$tpl['notifications'][$notifProvider]['events']['spot_posted'] = (isset($prefs['notifications'][$notifProvider]['events']['spot_posted'])) ? true : false;
-			$tpl['notifications'][$notifProvider]['events']['user_added'] = (isset($prefs['notifications'][$notifProvider]['events']['user_added'])) ? true : false;
-			$tpl['notifications'][$notifProvider]['events']['newspots_for_filter'] = (isset($prefs['notifications'][$notifProvider]['events']['newspots_for_filter'])) ? true : false;
+			$anonSkel['notifications'][$notifProvider]['enabled'] = (isset($prefs['notifications'][$notifProvider]['enabled'])) ? true : false;
+			$anonSkel['notifications'][$notifProvider]['events']['watchlist_handled'] = (isset($prefs['notifications'][$notifProvider]['events']['watchlist_handled'])) ? true : false;
+			$anonSkel['notifications'][$notifProvider]['events']['nzb_handled'] = (isset($prefs['notifications'][$notifProvider]['events']['nzb_handled'])) ? true : false;
+			$anonSkel['notifications'][$notifProvider]['events']['retriever_finished'] = (isset($prefs['notifications'][$notifProvider]['events']['retriever_finished'])) ? true : false;
+			$anonSkel['notifications'][$notifProvider]['events']['report_posted'] = (isset($prefs['notifications'][$notifProvider]['events']['report_posted'])) ? true : false;
+			$anonSkel['notifications'][$notifProvider]['events']['spot_posted'] = (isset($prefs['notifications'][$notifProvider]['events']['spot_posted'])) ? true : false;
+			$anonSkel['notifications'][$notifProvider]['events']['user_added'] = (isset($prefs['notifications'][$notifProvider]['events']['user_added'])) ? true : false;
+			$anonSkel['notifications'][$notifProvider]['events']['newspots_for_filter'] = (isset($prefs['notifications'][$notifProvider]['events']['newspots_for_filter'])) ? true : false;
 		} # foreach
 
 		# When nzbhandling settings are not entered at all, we default to disable
 		if (!isset($prefs['nzbhandling'])) {
-			$tpl['nzbhandling'] = array('action' => 'disable',
+			$anonSkel['nzbhandling'] = array('action' => 'disable',
 										  'prepare_action' => 'merge');										  
 		} # if
+
+		/*
+		 * We add the users' template specific settings to the basic
+		 * skeleton of settings so those settings aren't removed.
+		 */
+		unset($anonSkel['template_specific']);
+		$tmplSkel = array('template_specific' => $tmplSkel);
+		$anonSkel = $this->array_merge_recursive_overwrite($tmplSkel, $anonSkel);
 
 		/*
 		 * Unset any keys in the preferences which aren't available 
 		 * in the preferences template (anonyuser)
 		 */
-		foreach(array_diff_key($prefs, $tpl) as $keys => $values) {
+		foreach(array_diff_key($prefs, $anonSkel) as $keys => $values) {
 			unset($prefs[$keys]);
 		} # foreach
 
@@ -480,7 +499,7 @@ class SpotUserSystem {
 		 * expect it to do and merge embedded arrays by combining them
 		 * instead of overwriting key values...
 		 */ 
-		$prefs = $this->array_merge_recursive_overwrite($tpl, $prefs);
+		$prefs = $this->array_merge_recursive_overwrite($anonSkel, $prefs);
 
 		return $prefs;
 	} # cleanseUserPreferences
@@ -493,7 +512,7 @@ class SpotUserSystem {
 		
 		# Define several arrays with valid settings
 		$validDateFormats = array('human', '%a, %d-%b-%Y (%H:%M)', '%d-%m-%Y (%H:%M)');
-		$validTemplates = array('we1rdo');
+		$validTemplates = array_keys($this->_settings->get('valid_templates'));
 		$validDefaultSorts = array('', 'stamp');
 		$validLanguages = array_keys($this->_settings->get('system_languages'));
 		
@@ -508,7 +527,15 @@ class SpotUserSystem {
 			$errorList[] = _('Invalid user preference value (date_formatting)');
 		} # if
 		
-		if (in_array($prefs['template'], $validTemplates) === false) { 	
+		if (in_array($prefs['normal_template'], $validTemplates) === false) { 	
+			$errorList[] = _('Invalid user preference value (template)');
+		} # if
+
+		if (in_array($prefs['mobile_template'], $validTemplates) === false) { 	
+			$errorList[] = _('Invalid user preference value (template)');
+		} # if
+
+		if (in_array($prefs['tablet_template'], $validTemplates) === false) { 	
 			$errorList[] = _('Invalid user preference value (template)');
 		} # if
 
@@ -1119,7 +1146,7 @@ class SpotUserSystem {
 			$filter['sorton'] = '';
 			$filter['sortorder'] = '';
 			$filter['tree'] = '';
-			$filter['enablenotify'] = (boolean) $filterItem->enablenotify;
+			$filter['enablenotify'] = (string) $filterItem->enablenotify;
 			$filter['children'] = array();
 
 			/*
@@ -1275,5 +1302,20 @@ class SpotUserSystem {
 			return "N/A";
 		} # if
 	} # determineUsersIpAddress
+
+	/* 
+	 * Returns a string depending on the device type.
+	 */
+	 function determineDeviceType() {
+	 	$mobDetect = new Mobile_Detect();
+
+	 	if ($mobDetect->isTablet()) {
+	 		return "tablet";
+	 	} elseif ($mobDetect->isMobile()) {
+	 		return "mobile";
+	 	} else {
+	 		return "full";
+	 	} # else
+	} # determineDeviceType
 	
 } # class SpotUserSystem

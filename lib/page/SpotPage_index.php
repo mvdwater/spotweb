@@ -54,11 +54,11 @@ class SpotPage_index extends SpotPage_Abs {
 			$this->_spotSec->fatalPermCheck(SpotSecurity::spotsec_keep_own_watchlist, '');
 			
 			switch($this->_action) {
-				case 'remove'	: $this->_db->removeFromSpotStateList(SpotDb::spotstate_Watch, $this->_params['messageid'], $this->_currentSession['user']['userid']);
+				case 'remove'	: $this->_db->removeFromWatchList($this->_params['messageid'], $this->_currentSession['user']['userid']);
 								  $spotsNotifications = new SpotNotifications($this->_db, $this->_settings, $this->_currentSession);
 								  $spotsNotifications->sendWatchlistHandled($this->_action, $this->_params['messageid']);
 								  break;
-				case 'add'		: $this->_db->addToSpotStateList(SpotDb::spotstate_Watch, $this->_params['messageid'], $this->_currentSession['user']['userid'], '');
+				case 'add'		: $this->_db->addToWatchList($this->_params['messageid'], $this->_currentSession['user']['userid']);
 								  $spotsNotifications = new SpotNotifications($this->_db, $this->_settings, $this->_currentSession);
 								  $spotsNotifications->sendWatchlistHandled($this->_action, $this->_params['messageid']);
 								  break;
@@ -78,7 +78,7 @@ class SpotPage_index extends SpotPage_Abs {
 		} # if
 		
 		# zet de page title
-		$this->_pageTitle = _("overzicht");
+		$this->_pageTitle = _("overview");
 		
 		#- display stuff -#
 		$this->template('spots', array(

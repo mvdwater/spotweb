@@ -53,13 +53,14 @@ class SpotPage_createuser extends SpotPage_Abs {
 			$formMessages['errors'] = $spotUserSystem->validateUserRecord($spotUser, false);
 
 			# Is er geen andere user met dezelfde username?
-			if ($this->_db->usernameExists($spotUser['username'])) {
+			$userIdForName = $this->_db->findUserIdForName($spotUser['username']);
+			if (!empty($userIdForName)) {
 				$formMessages['errors'][] = sprintf(_("'%s' already exists"), $spotUser['username']);
 			} # if
 			
 			if (empty($formMessages['errors'])) {
 				# Creer een private en public key paar voor deze user
-				$spotSigning = new SpotSigning();
+				$spotSigning = Services_Signing_Base::newServiceSigning();
 				$userKey = $spotSigning->createPrivateKey($this->_settings->get('openssl_cnf_path'));
 				$spotUser['publickey'] = $userKey['public'];
 				$spotUser['privatekey'] = $userKey['private'];

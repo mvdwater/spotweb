@@ -67,13 +67,12 @@ class SpotRetriever_Comments extends SpotRetriever_Abs {
 		/*
 		 * Actually process the retrieved headers from XOVER
 		 */
-		function process($hdrList, $curMsg, $endMsg) {
+		function process($hdrList, $curMsg, $endMsg, $timer) {
 			$this->displayStatus("progress", ($curMsg) . " till " . ($endMsg));
 		
 			$lastProcessedId = '';
 			$commentDbList = array();
 			$fullCommentDbList = array();
-			$timer = microtime(true);
 
 			/*
 			 * Determine the cutoff date (unixtimestamp) from whereon we do not want to 
@@ -238,7 +237,7 @@ class SpotRetriever_Comments extends SpotRetriever_Abs {
 							 * messageid's we already have retrieved and are ready
 							 * to be added to the database
 							 */
-							$dbIdList['fullcomment'][$msgid] = 1;
+							$dbIdList['fullcomment'][$commentId] = 1;
 						} 
 						catch(ParseSpotXmlException $x) {
 							; # swallow error

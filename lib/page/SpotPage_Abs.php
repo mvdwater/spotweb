@@ -20,7 +20,7 @@ abstract class SpotPage_Abs {
 		 * Create a list of paths where to look for template files in
 		 * the correct (last template first) order
 		 */
-		$this->_templatePaths = array('templates/' . $settings->get('tpl_name') . '/');
+		$this->_templatePaths = array('templates/' . $currentSession['active_tpl'] . '/');
 		foreach($this->_tplHelper->getParentTemplates() as $parentTemplate) {
 			$this->_templatePaths[] = 'templates/' . $parentTemplate . '/';
 		} # foreach
@@ -63,8 +63,8 @@ abstract class SpotPage_Abs {
 
 	
 	# Geef the tpl helper terug
-	function getTplHelper($params) {
-		$tplName = $this->_settings->get('tpl_name');
+	private function getTplHelper($params) {
+		$tplName = $this->_currentSession['active_tpl'];
 
 		$className = 'SpotTemplateHelper_' . ucfirst($tplName);
 		$tplHelper = new $className($this->_settings, $this->_currentSession, $this->_db, $params);
@@ -99,6 +99,8 @@ abstract class SpotPage_Abs {
 		foreach($this->_templatePaths as $tplPath) {
 			if (file_exists($tplPath . $tpl . '.inc.php')) {
 				require_once($tplPath . $tpl . '.inc.php');
+
+				break;
 			} # if
 		} # foreach
 		SpotTiming::stop(__FUNCTION__ . ':' . $tpl, array($params));

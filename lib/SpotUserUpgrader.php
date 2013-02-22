@@ -66,6 +66,32 @@ class SpotUserUpgrader {
 	} # createAnonymous
 
 	/*
+	 * Create a password hash. Duplicate with
+	 * SpotUserSystem but we cannot rely on that one
+	 * to be available for the moment
+	 */
+	function passToHash($password) {
+		return sha1(strrev(substr($this->_settings->get('pass_salt'), 1, 3)) . $password . $this->_settings->get('pass_salt'));
+	} # passToHash
+
+
+	/*
+	 * Resets a given users' password
+	 */
+	function resetUserPassword($username, $password) {
+		$userId = $this->_db->findUserIdForName($username);
+		if (empty($userId)) {
+			throw new Exception("Username cannot be found to reset password for");
+		} # if
+
+		# Retrieve the actual userid
+		$user = $this->_db->getUser($userId);
+
+		# update the password
+		$user['passhash'] = $this->passToHash($password);
+		$this->_db->setUserPassword($user);
+	} # resetUserPassword
+	/*
 	 * Create the admin user 
 	 */
 	function createAdmin($firstName, $lastName, $password, $mail) {
@@ -78,11 +104,8 @@ class SpotUserUpgrader {
 		# DB connection
 		$dbCon = $this->_db->getDbHandle();
 
-		# Retrieve the password salt from the settings
-		$passSalt = $this->_settings->get('pass_salt');
-		
 		# calculate the password salt for the admin user
-		$adminPwdHash = sha1(strrev(substr($passSalt, 1, 3)) . $password . $passSalt);
+		$adminPwdHash = $this->passToHash($password);
 		
 		# Create an Spotweb API key. It cannot be used but should not be empty
 		$apikey = md5('admin');
@@ -136,12 +159,12 @@ class SpotUserUpgrader {
 					/* Grant the group with the view permissions */
 					$dbCon->rawExec("INSERT INTO usergroups(userid,groupid,prio) VALUES(1, 2, 1)");
 				} # else
-			} elseif ($user['userid'] == 2) {
+			} elseif (($user['userid'] == 2) || ($user['userid'] == $this->_settings->get('custom_admin_userid'))) {
 				# Admin user
-				$dbCon->rawExec("INSERT INTO usergroups(userid,groupid,prio) VALUES(2, 2, 1)");
-				$dbCon->rawExec("INSERT INTO usergroups(userid,groupid,prio) VALUES(2, 3, 2)");
-				$dbCon->rawExec("INSERT INTO usergroups(userid,groupid,prio) VALUES(2, 4, 3)");
-				$dbCon->rawExec("INSERT INTO usergroups(userid,groupid,prio) VALUES(2, 5, 4)");
+				$dbCon->rawExec("INSERT INTO usergroups(userid,groupid,prio) VALUES(" . $user['userid'] . ", 2, 1)");
+				$dbCon->rawExec("INSERT INTO usergroups(userid,groupid,prio) VALUES(" . $user['userid'] . ", 3, 2)");
+				$dbCon->rawExec("INSERT INTO usergroups(userid,groupid,prio) VALUES(" . $user['userid'] . ", 4, 3)");
+				$dbCon->rawExec("INSERT INTO usergroups(userid,groupid,prio) VALUES(" . $user['userid'] . ", 5, 4)");
 			} else {
 				# Grant the regular users all the necessary security groups
 				$dbCon->rawExec("INSERT INTO usergroups(userid,groupid,prio) VALUES(" . $user['userid'] . ", 2, 1)");
@@ -161,6 +184,37 @@ class SpotUserUpgrader {
 	} # resetUserGroupMembership
 
 	/*
+	 * Mass update all users preferences
+	 */
+	function massChangeUserPreferences($prefName, $prefValue) {
+		$userList = $this->_db->getUserList();
+
+		# loop through every user and fix it 
+		foreach($userList as $user) {
+			/*
+			 * Because we do not get all users' properties from
+			 * getUserList, retrieve the users' settings from scratch
+			 */
+			$user = $this->_db->getUser($user['userid']);
+
+
+			/*
+			 * update the preference in the record, we don't
+			 * support nested preferences just yet.
+			 */
+			if (isset($user['prefs'][$prefName])) {
+				$user['prefs'][$prefName] = $prefValue;
+			} # if
+
+
+			/*
+			 * update the user record in the database			
+			 */
+			$this->_db->setUser($user);
+		} # foreach
+	} # massChangeUserPreferences
+
+	/*
 	 * Update all users preferences
 	 */
 	function updateUserPreferences() {
@@ -177,7 +231,9 @@ class SpotUserUpgrader {
 			# set the users' preferences
 			$this->setSettingIfNot($user['prefs'], 'perpage', 25);
 			$this->setSettingIfNot($user['prefs'], 'date_formatting', 'human');
-			$this->setSettingIfNot($user['prefs'], 'template', 'we1rdo');
+			$this->setSettingIfNot($user['prefs'], 'normal_template', 'we1rdo');
+			$this->setSettingIfNot($user['prefs'], 'mobile_template', 'we1rdo');
+			$this->setSettingIfNot($user['prefs'], 'tablet_template', 'we1rdo');
 			$this->setSettingIfNot($user['prefs'], 'count_newspots', true);
             $this->setSettingIfNot($user['prefs'], 'mouseover_subcats', true);
 			$this->setSettingIfNot($user['prefs'], 'keep_seenlist', true);
@@ -187,12 +243,13 @@ class SpotUserUpgrader {
 			$this->setSettingIfNot($user['prefs'], 'nzb_search_engine', 'nzbindex');
 			$this->setSettingIfNot($user['prefs'], 'show_filesize', true);
 			$this->setSettingIfNot($user['prefs'], 'show_reportcount', true);
+			$this->setSettingIfNot($user['prefs'], 'minimum_reportcount', 1);
 			$this->setSettingIfNot($user['prefs'], 'show_nzbbutton', true);
 			$this->setSettingIfNot($user['prefs'], 'show_multinzb', true);
 			$this->setSettingIfNot($user['prefs'], 'customcss', '');
 			$this->setSettingIfNot($user['prefs'], 'newspotdefault_tag', $user['username']);
 			$this->setSettingIfNot($user['prefs'], 'newspotdefault_body', '');
-			$this->setSettingIfNot($user['prefs'], 'user_language', 'nl_NL');
+			$this->setSettingIfNot($user['prefs'], 'user_language', 'en_US');
 			$this->setSettingIfNot($user['prefs'], 'show_avatars', true);
 			$this->setSettingIfNot($user['prefs'], 'usemailaddress_for_gravatar', true);
 
@@ -237,6 +294,7 @@ class SpotUserUpgrader {
 
 			# Remove deprecated preferences
 			$this->unsetSetting($user['prefs'], 'search_url');
+			$this->unsetSetting($user['prefs'], 'template');
 			$this->unsetSetting($user['prefs']['notifications'], 'libnotify');
 			
 			# Make sure the user has a valid RSA key
@@ -244,7 +302,7 @@ class SpotUserUpgrader {
 				$rsaKey = $this->_db->getUserPrivateRsaKey($user['userid']);
 				if (empty($rsaKey)) {
 					# Creer een private en public key paar voor deze user
-					$spotSigning = new SpotSigning();
+					$spotSigning = Services_Signing_Base::newServiceSigning();
 					$userKey = $spotSigning->createPrivateKey($this->_settings->get('openssl_cnf_path'));
 					
 					$this->_db->setUserRsaKeys($user['userid'], $userKey['public'], $userKey['private']);
@@ -368,6 +426,14 @@ class SpotUserUpgrader {
 		########################################################################
 		if (($forceReset) || ($this->_settings->get('securityversion') < 0.28)) {
 			$dbCon->rawExec("INSERT INTO grouppermissions(groupid,permissionid, objectid) VALUES(3, " . SpotSecurity::spotsec_send_notifications_types . ", 'newspots_for_filter')");
+		} # if
+
+		########################################################################
+		## Security level 0.29
+		########################################################################
+		if (($forceReset) || ($this->_settings->get('securityversion') < 0.29)) {
+			$dbCon->rawExec("INSERT INTO grouppermissions(groupid,permissionid, objectid) VALUES(3, " . SpotSecurity::spotsec_select_template . ", 'we1rdo')");
+			$dbCon->rawExec("INSERT INTO grouppermissions(groupid,permissionid, objectid) VALUES(3, " . SpotSecurity::spotsec_select_template . ", 'mobile')");
 		} # if
 	} # updateSecurityGroups
 

@@ -73,6 +73,10 @@ class SpotSettingsUpgrader {
 				));
 		$this->setIfNot('nonauthenticated_userid', 1);
 		$this->setIfNot('custom_admin_userid', 2); 
+		$this->setIfNot('valid_templates', 
+				array(
+						'we1rdo' => 'we1rdo'
+				));; 
 
 		$this->updateSettingsVersion();
 	} # update()
@@ -106,7 +110,7 @@ class SpotSettingsUpgrader {
 	 * Create the server private and public keys
 	 */
 	function createServerKeys($openSslCnfPath) {
-		$spotSigning = new SpotSigning();
+		$spotSigning = Services_Signing_Base::newServiceSigning();
 		$x = $spotSigning->createPrivateKey($openSslCnfPath);
 		
 		$this->setIfNot('publickey', $x['public']);
@@ -175,6 +179,9 @@ class SpotSettingsUpgrader {
 			case 'public' : {
 				# Public sites should be indexable by a search engine
 				$this->_settings->set('deny_robots', false);
+
+				# Public systems should not show a public visible stack trace either
+				$this->setIfNot('enable_stacktrace', true);
 
 				# Reset the new users' group membership, id 2 is anonymous, 3 = authenticated
 				$this->_settings->set('newuser_grouplist', array( Array('groupid' => 2, 'prio' => 1), Array('groupid' => 3, 'prio' => 2) ));

@@ -3,9 +3,48 @@ class SpotParser {
 	private $_spotSigning = null;
 	
 	function __construct() {
-		$this->_spotSigning = new SpotSigning();
+		$this->_spotSigning = Services_Signing_Base::newServiceSigning();
 	} # ctor
 	
+
+	/*
+	 * Some Spotnet clients create invalid XML - see 
+	 * messageid ZOB4WPyqQfcHqykUAES8q@spot.net for example, because
+	 * it uses an unescaped & not in an CDATA block.
+	 */
+	private function correctElmContents($xmlStr, $elems) {
+		$cdataStart = '<![CDATA[';
+		$cdataEnd = ']]>';
+
+		/*
+		 * replace low-ascii characters, see messageid KNCuzvnxJJErJibUAAxQJ@spot.net
+		 */
+                $xmlStr = preg_replace('/[\x00-\x1F]/', '', $xmlStr);
+
+		/* and loop through all elements and fix them up */
+		foreach($elems as $elementName) {
+			// find the element entries
+			$startElem = stripos($xmlStr, '<' . $elementName . '>');
+			$endElem = stripos($xmlStr, '</' . $elementName . '>');
+
+			if (($startElem === false) || ($endElem === false)) {
+				continue;
+			}
+
+			/*
+			 * Make sure this elements content is not preceeded by the
+			 * required CDATA header
+			 */ 
+			if (substr($xmlStr, $startElem + strlen($elementName) + 2, strlen($cdataStart)) !== $cdataStart) {
+				$xmlStr = str_replace(
+					Array('<' . $elementName . '>', '</' . $elementName . '>'),
+					Array('<' . $elementName . '>' . $cdataStart, $cdataEnd . '</' . $elementName . '>'),
+					$xmlStr);
+			} // if
+		} # foreach
+
+		return $xmlStr;
+	} # correctElmContents
 	
 	function parseFull($xmlStr) {
 		# Create a template array so we always have the full fields to prevent ugly notices
@@ -14,6 +53,23 @@ class SpotParser {
 						  'filename' => '', 'newsgroup' => '', 'subcatlist' => array(), 'subcata' => '', 'subcatb' => '', 
 						  'subcatc' => '', 'subcatd' => '', 'subcatz' => '');
 
+		/* 
+		 * Some legacy potNet clients create incorrect/invalid multiple segments,
+		 * we use this crude way to workaround this. GH issue #1608
+		 */
+		if (strpos($xmlStr, 'spot.net></Segment') !== false) {
+                        $xmlStr = str_replace(
+                                        Array('spot.net></Segment>', 'spot.ne</Segment>'),
+                                        Array('spot.net</Segment>', 'spot.net</Segment>'),
+					$xmlStr
+                        );
+		} // if 
+
+		/* 
+		 * Fix up some forgotten entity encoding / cdata sections in the XML
+		 */
+		$xmlStr = $this->correctElmContents($xmlStr, array('Title', 'Description', 'Image', 'Tag', 'Website'));
+	
 		/* 
 		 * Supress errors for corrupt messageids, eg: <evoCgYpLlLkWe97TQAmnV@spot.net>
 		 */		
@@ -72,7 +128,7 @@ class SpotParser {
 				$tpl_spot['nzb'][] = (string) $seg;
 			} # else
 		} # foreach
-
+		
 		# fix the category in the XML array but only for new spots
 		if ((int) $xml->Key != 1) {
 			$tpl_spot['category'] = ((int) $tpl_spot['category']) - 1;
@@ -117,6 +173,9 @@ class SpotParser {
 		if (empty($tpl_spot['subcatz'])) {
 			$tpl_spot['subcatz'] = SpotCategories::createSubcatZ($tpl_spot['category'], $tpl_spot['subcata'] . $tpl_spot['subcatb'] . $tpl_spot['subcatd']);
 		} # if
+
+		# map deprecated genre categories to their new genre category
+		$tpl_spot['subcatd'] = SpotCategories::mapDepricatedGenreSubCategories($tpl_spot['category'], $tpl_spot['subcatd'], $tpl_spot['subcatz']);
 		
 		# and return the parsed XML
 		return $tpl_spot;
@@ -190,21 +249,9 @@ class SpotParser {
 		$spot['subcatd'] = '';
 		$spot['subcatz'] = '';
 		$spot['wassigned'] = false;
+		$spot['spotterid'] = '';
 		$isRecentKey = $spot['keyid'] <> 1;
 		
-		# If the user signature is known, calculate the spotterid
-		if ((empty($spot['user-signature'])) || (empty($spot['selfsignedpubkey']))) {
-			$spot['spotterid'] = '';
-		} else {
-			$spot['spotterid'] = $this->_spotSigning->calculateSpotterId($spot['selfsignedpubkey']);
-			$spot['user-key'] = array('modulo' => $spot['selfsignedpubkey'],
-									  'exponent' => 'AQAB');
-			/* 
-			 * The spot contains the signature of the header in the 
-			 */
-			$spot['verified'] = $this->_spotSigning->verifyFullSpot($spot);
-		} # else
-
 		/* 
 		 * If the keyid is invalid, abort trying to parse it
 		 */
@@ -259,7 +306,10 @@ class SpotParser {
 		if (empty($spot['subcatz'])) {
 			$spot['subcatz'] = SpotCategories::createSubcatz($spot['category'], $spot['subcata'] . $spot['subcatb'] . $spot['subcatd']);
 		} # if
-
+		
+		# map deprecated genre categories to their new genre category
+		$spot['subcatd'] = SpotCategories::mapDepricatedGenreSubCategories($spot['category'], $spot['subcatd'], $spot['subcatz']);
+		
 		if ((strpos($subj, '=?') !== false) && (strpos($subj, '?=') !== false)) {
 			# Make sure its as simple as possible
 			$subj = str_replace('?= =?', '?==?', $subj);
@@ -307,18 +357,61 @@ class SpotParser {
 		$mustbeSigned = $isRecentKey | ($spot['stamp'] > 1293870080);
 		if ($mustbeSigned) {
 			$spot['headersign'] = $fields[count($fields) - 1];
+			$spot['wassigned'] = (strlen($spot['headersign']) != 0);
+		} # if must be signed
+		else {
+			$spot['verified'] = true;
+			$spot['wassigned'] = false;
+		} # if doesnt need to be signed, pretend that it is
 
-			if (strlen($spot['headersign']) != 0) {
-				# the signature this header is signed with
-				$signature = $this->unspecialString($spot['headersign']);
-
-				$spot['wassigned'] = true;
-
+		/*
+		 * Don't verify spots which are already verified
+		 */
+		if ($spot['wassigned']) {
+			/*
+			 * There are currently two known methods to which Spots are signed,
+			 * each having different charachteristics, making it a bit difficult
+			 * to work with this.
+			 *
+			 * The oldest method uses a secret private key and a signing server, we
+			 * name this method SPOTSIGN_V1. The users' public key is only available
+			 * in the XML header, not in the From header. This is the preferred method.
+			 *
+			 * The second method uses a so-called "self signed" spot (the spotter signs
+			 * the spots, posts the public key in the header and a hashcash is used to
+			 * prevent spamming). This method is called SPOTSIGN_V2.
+			 *
+			 */
+			if ($spot['keyid'] == 7) {
 				/*
 				 * KeyID 7 has a special meaning, it defines a self-signed spot and
 				 * requires a hashcash
 				 */
-				if ($spot['keyid'] == 7) {
+				$signingMethod = 2;
+			} else {
+				$signingMethod = 1;
+			} # else
+
+
+			switch($signingMethod) {
+				case 1 : {
+					# the signature this header is signed with
+					$signature = $this->unspecialString($spot['headersign']);
+			
+					/*
+					 * Make sure the key specified is an actual known key 
+					 */
+					if (isset($rsaKeys[$spot['keyid']])) {
+						$spot['verified'] = $this->_spotSigning->verifySpotHeader($spot, $signature, $rsaKeys);
+					} # if
+
+					break;
+				} # SPOTSIGN_V1
+
+				case 2 : {
+					# the signature this header is signed with
+					$signature = $this->unspecialString($spot['headersign']);
+
 					$userSignedHash = sha1('<' . $spot['messageid'] . '>', false);
 					$spot['verified'] = (substr($userSignedHash, 0, 3) == '0000');
 
@@ -329,10 +422,10 @@ class SpotParser {
 					 if ($spot['verified']) {
 						$userRsaKey = array(7 => array('modulo' => $spot['selfsignedpubkey'],
 													   'exponent' => 'AQAB'));
-													   
+				
 						/*
 						 * We cannot use this as a full measure to check the spot's validness yet, 
-						 * because at least one Spotnet client feeds us invalid date for now
+						 * because at least one Spotnet client feeds us invalid data for now
 						 */
 						if ($this->_spotSigning->verifySpotHeader($spot, $signature, $userRsaKey)) {
 							/* 
@@ -341,17 +434,33 @@ class SpotParser {
 							 */
 							$spot['spotterid'] = $this->_spotSigning->calculateSpotterId($spot['selfsignedpubkey']);
 						} # if
-						
 					} # if
-				} elseif (isset($rsaKeys[$spot['keyid']])) {
-					$spot['verified'] = $this->_spotSigning->verifySpotHeader($spot, $signature, $rsaKeys);
-				} # else
+
+					break;
+				} # SPOTSIGN_V2
+			} # switch
+
+			/*
+			 * Even more recent spots, contain the users' full publickey
+			 * in the header. This allows us to uniquely identify and verify
+			 * the poster of the spot.
+			 *
+			 * Try to extract this information.
+			 */
+			if (($spot['verified']) && (!empty($spot['user-signature'])) && (!empty($spot['selfsignedpubkey']))) {
+				/*
+				 * Extract the public key
+				 */
+				$spot['spotterid'] = $this->_spotSigning->calculateSpotterId($spot['selfsignedpubkey']);
+				$spot['user-key'] = array('modulo' => $spot['selfsignedpubkey'],
+										  'exponent' => 'AQAB');
+				/* 
+				 * The spot contains the signature in the header of the spot
+				 */
+				$spot['verified'] = $this->_spotSigning->verifyFullSpot($spot);
 			} # if
-		} # if must be signed
-		else {
-			$spot['verified'] = true;
-			$spot['wassigned'] = false;
-		} # if doesnt need to be signed, pretend that it is
+
+		} # if was signed
 
 		/*
 		 * We convert the title and other fields to UTF8, we cannot

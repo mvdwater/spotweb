@@ -78,15 +78,21 @@ class SpotPage_newznabapi extends SpotPage_Abs {
 			$tvSearch = $showTitle->item(0)->nodeValue;
 
 			$epSearch = '';
-			if (preg_match('/^[sS][0-9]{1,2}$/', $this->_params['season']) || preg_match('/^[0-9]{1,2}$/', $this->_params['season'])) {
-				$epSearch = (is_numeric($this->_params['season'])) ? 'S' . str_pad($this->_params['season'], 2, "0", STR_PAD_LEFT) : $this->_params['season'];
+			if (preg_match('/^[sS][0-9]{1,2}$/', $this->_params['season']) || preg_match('/^[0-9]{1,4}$/', $this->_params['season'])) {
+
+				if (strlen($this->_params['season']) < 3) {
+					$epSearch = (is_numeric($this->_params['season'])) ? 'S' . str_pad($this->_params['season'], 2, "0", STR_PAD_LEFT) : $this->_params['season'];
+				} else {
+					$epSearch = $this->_params['season'] . ' ';
+				} # else 
+
 			} elseif ($this->_params['season'] != "") {
 				$this->showApiError(201);
 				
 				return ;
 			} # if
 
-			if (preg_match('/^[eE][0-9]{1,2}$/', $this->_params['ep']) || preg_match('/^[0-9]{1,2}$/', $this->_params['ep'])) {
+			if (preg_match('/^[eE][0-9]{1,2}$/', $this->_params['ep']) || preg_match('/^[0-9]{1,2}$/', $this->_params['ep']) || preg_match('/^[0-9]{1,2}\/[0-9]{1,2}$/', $this->_params['ep'])) {
 				$epSearch .= (is_numeric($this->_params['ep'])) ? 'E' . str_pad($this->_params['ep'], 2, "0", STR_PAD_LEFT) : $this->_params['ep'];
 			} elseif ($this->_params['ep'] != "") {
 				$this->showApiError(201);
@@ -94,7 +100,8 @@ class SpotPage_newznabapi extends SpotPage_Abs {
 				return ;
 			} # if
 
-			$search['value'][] = "Titel:=:" . trim($tvSearch) . " " . $epSearch;
+			# The + operator is supported both by PostgreSQL and MySQL's FTS
+			$search['value'][] = "Titel:=:+\"" . trim($tvSearch) . "\" +" . $epSearch;
 		} elseif ($this->_params['t'] == "music") {
 			if (empty($this->_params['artist']) && empty($this->_params['cat'])) {
 				$this->_params['cat'] = 3000;
@@ -120,7 +127,20 @@ class SpotPage_newznabapi extends SpotPage_Abs {
 				return ;
 			} # if
 			preg_match('/<h1 class="header" itemprop="name">([^\<]*)<span([^\<]*)>/ms', $imdb['content'], $movieTitle);
-			$search['value'][] = "Titel:=:\"" . trim($movieTitle[1]) . "\"";
+			
+
+			/* Extract the release date from the IMDB info page */
+			preg_match('/\<a href="\/year\/([0-9]{4})/ms', $imdb['content'], $movieReleaseDate);
+
+
+			$search['value'][] = "Titel:=:+\"" . trim($movieTitle[1]) . "\" +(" . $movieReleaseDate[1] . ")";
+
+			// imdb sometimes returns the title translated, if so, pass the original title as well
+			preg_match('/<span class="title-extra">([^\<]*)<i>/ms', $imdb['content'], $originalTitle);
+			if ((!empty($originalTitle)) && ($originalTitle[1] != $movieTitle[1])) {
+				$search['value'][] = "Titel:=:+\"" . trim($originalTitle[1]) . "\" +(" . $movieReleaseDate[1] . ")";
+			} // if
+
 		} elseif (!empty($this->_params['q'])) {
 			$searchTerm = str_replace(" ", " +", $this->_params['q']);
 			$search['value'][] = "Titel:=:+" . $searchTerm;
@@ -148,6 +168,7 @@ class SpotPage_newznabapi extends SpotPage_Abs {
 		$spotUserSystem = new SpotUserSystem($this->_db, $this->_settings);
 		$parsedSearch = $spotsOverview->filterToQuery($search, array('field' => 'stamp', 'direction' => 'DESC'), $this->_currentSession,
 							$spotUserSystem->getIndexFilter($this->_currentSession['user']['userid']));
+
 		$spots = $spotsOverview->loadSpots($this->_currentSession['user']['userid'],
 						$pageNr,
 						$limit,
@@ -456,7 +477,7 @@ class SpotPage_newznabapi extends SpotPage_Abs {
 		if ($this->_params['del'] == "1" && $this->_spotSec->allowed(SpotSecurity::spotsec_keep_own_watchlist, '')) {
 			$spot = $this->_db->getFullSpot($this->_params['messageid'], $this->_currentSession['user']['userid']);
 			if ($spot['watchstamp'] !== NULL) {
-				$this->_db->removeFromSpotStateList(SpotDb::spotstate_Watch, $this->_params['messageid'], $this->_currentSession['user']['userid']);
+				$this->_db->removeFromWatchList($this->_params['messageid'], $this->_currentSession['user']['userid']);
 				$spotsNotifications = new SpotNotifications($this->_db, $this->_settings, $this->_currentSession);
 				$spotsNotifications->sendWatchlistHandled('remove', $this->_params['messageid']);
 			} # if

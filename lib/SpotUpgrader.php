@@ -90,7 +90,7 @@ class SpotUpgrader {
 	} # resetSecurityGroups
 
 	/*
-	 * Reset securitygroup settings to their default
+	 * Reset users' filters settings to their default
 	 */
 	function resetFilters() {
 		# Create the settings object
@@ -99,6 +99,16 @@ class SpotUpgrader {
 		$spotUserUpgrader->updateUserFilters(true);
 	} # resetFilters
 	 
+	/*
+	 * Perform a mass change for users' preferences
+	 */
+	function massChangeUserPreferences($prefName, $prefValue) {
+		# Create the settings object
+		$settings = SpotSettings::singleton($this->_db, $this->_phpSettings);
+		$spotUserUpgrader = new SpotUserUpgrader($this->_db, $settings);
+		$spotUserUpgrader->massChangeUserPreferences($prefName, $prefValue);
+	} # massChangeUserPreferences
+
 	/*
 	 * Reset a systems' type to the given setting
 	 */
@@ -114,6 +124,18 @@ class SpotUpgrader {
 		# and reset all the users' group memberships for all users to match
 		$spotUserUpgrader->resetUserGroupMembership($systemType);
 	} # resetSystemType
+
+	/*
+	 * Reset a users' password
+	 */
+	function resetPassword($username) {
+		# Create the settings object
+		$settings = SpotSettings::singleton($this->_db, $this->_phpSettings);
+		$spotUserUpgrader = new SpotUserUpgrader($this->_db, $settings);
+
+		# retrieve the userid
+		$spotUserUpgrader->resetUserPassword($username, 'spotweb');
+	} # resetPassword
 
 } # SpotUpgrader
 

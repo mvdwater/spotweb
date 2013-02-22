@@ -1,4 +1,6 @@
 <?php
+	error_reporting(2147483647);
+
 	require_once "lib/SpotClassAutoload.php";
 	try {
 		@include('settings.php');
@@ -7,6 +9,12 @@
 		// ignore errors
 	} # catch
 	set_error_handler("ownWarning",E_WARNING);
+
+	/*
+	 * We output headers after already sending HTML, make
+	 * sure output buffering is turned on.
+	 */
+	ob_start();
 	
 	/*
 	 * We default to a succeeded install, let it prove
@@ -73,6 +81,7 @@
 			<tr> <td colspan="2"> DOM </td> <td> <?php showResult(extension_loaded('dom'), true); ?> </td> </tr>
 			<tr> <td colspan="2"> gettext </td> <td> <?php showResult(extension_loaded('gettext'), false); ?> </td> </tr>
 			<tr> <td colspan="2"> mbstring </td> <td> <?php showResult(extension_loaded('mbstring'), true); ?> </td> </tr>
+			<tr> <td colspan="2"> json </td> <td> <?php showResult(extension_loaded('json'), true); ?> </td> </tr>
 			<tr> <td colspan="2"> xml </td> <td> <?php showResult(extension_loaded('xml'), true); ?> </td> </tr>
 			<tr> <td colspan="2"> zip </td> <td> <?php showResult(extension_loaded('zip'), false, "", "You need this module to select multiple NZB files"); ?> </td> </tr>
 			<tr> <td colspan="2"> zlib </td> <td> <?php showResult(extension_loaded('zlib'), true); ?> </td> </tr>
@@ -90,12 +99,14 @@
 			<tr> <td colspan="2"> JPEG Support </td> <td> <?php showResult($gdInfo['JPEG Support'] || $gdInfo['JPG Support'], true); ?> </td> </tr> <!-- Previous to PHP 5.3.0, the JPEG Support attribute was named JPG Support. -->
 			<tr> <td colspan="2"> PNG Support </td> <td> <?php showResult($gdInfo['PNG Support'], true); ?> </td> </tr>
 			<tr> <th colspan="3"> OpenSSL </th> </tr>
-		<?php require_once "lib/SpotSigning.php";
-			$spotSigning = new SpotSigning();
+		<?php require_once "lib/services/Signing/Services_Signing_Base.php";
+			require_once "lib/services/Signing/Services_Signing_Php.php";
+			require_once "lib/services/Signing/Services_Signing_Openssl.php";
+			$spotSigning = Services_Signing_Base::newServiceSigning();
 			$privKey = $spotSigning->createPrivateKey($settings['openssl_cnf_path']);
 			
 			/* We need either one of those 3 extensions, so set the error flag manually */
-			if ( (!extension_loaded('openssl')) && (!extension_loaded('openssl')) && (!extension_loaded('openssl'))) {
+			if ( (!extension_loaded('openssl')) && (!extension_loaded('gmp')) && (!extension_loaded('bcmath'))) {
 				$_testInstall_Ok = false;
 			} # if
 			
@@ -186,7 +197,7 @@
 			<table summary="PHP settings">
 				<tr> <th> Database settings </th> <th> </th> </tr>
 				<tr> <td colspan='2'> Spotweb needs an available MySQL or PostgreSQL database. The database needs to be created and you need to have an user account and password for this database. </td> </tr>
-				<tr> <td> type </td> <td> <select name='dbform[engine]'> <option value='mysql'>MySQL</option> <option value='postgresql'>PostgreSQL</option> </select> </td> </tr>
+				<tr> <td> type </td> <td> <select name='dbform[engine]'> <option value='mysql'>mysql</option> <option value='pdo_pgsql'>PostgreSQL</option> </select> </td> </tr>
 				<tr> <td> server </td> <td> <input type='text' length='40' name='dbform[host]' value='<?php echo htmlspecialchars($form['host']); ?>'></input> </td> </tr>
 				<tr> <td> database </td> <td> <input type='text' length='40' name='dbform[dbname]' value='<?php echo htmlspecialchars($form['dbname']); ?>' ></input></td> </tr>
 				<tr> <td> username </td> <td> <input type='text' length='40' name='dbform[user]' value='<?php echo htmlspecialchars($form['user']); ?>'></input> </td> </tr>
@@ -234,15 +245,23 @@
 						$form['nzb'] = $form;
 						$form['post'] = $form;
 				} else {
-					foreach($serverList->usenetservers->server as $server) {
-						if ( (string) $server['name'] == $form['name'] ) {
+					foreach($serverList->usenetservers->server as $provider) {
+						if (extension_loaded('openssl') && isset($provider->ssl)) {
+							$server = $provider->ssl;
+						} else {
+							$server = $provider->plain;
+						} # if
+
+						if ( (string) $provider['name'] == $form['name'] ) {
 							# Header usenet server
 							$form['hdr']['host'] = (string) $server->header;
 							$form['hdr']['user'] = $form['user'];
 							$form['hdr']['pass'] = $form['pass'];
 							if ( (string) $server->header['ssl'] == 'yes') {
 								$form['hdr']['enc'] = 'ssl';
-							} # if
+							} else {
+								$form['hdr']['enc'] = false;
+							} # else
 							$form['hdr']['port'] = (int) $server->header['port'];
 							$form['hdr']['buggy'] = (boolean) $server['buggy'];
 
@@ -252,7 +271,9 @@
 							$form['nzb']['pass'] = $form['pass'];
 							if ( (string) $server->nzb['ssl'] == 'yes') {
 								$form['nzb']['enc'] = 'ssl';
-							} # if
+							} else {
+								$form['nzb']['enc'] = false;
+							} # else
 							$form['nzb']['port'] = (int) $server->nzb['port'];
 							$form['nzb']['buggy'] = (boolean) $server['buggy'];
 
@@ -262,7 +283,9 @@
 							$form['post']['pass'] = $form['pass'];
 							if ( (string) $server->post['ssl'] == 'yes') {
 								$form['post']['enc'] = 'ssl';
-							} # if
+							} else {
+								$form['post']['enc'] = false;
+							} # else
 							$form['post']['port'] = (int) $server->post['port'];
 							$form['post']['buggy'] = (boolean) $server['buggy'];
 						} # if
@@ -274,7 +297,6 @@
 				$nntp->validateServer();
 
 				$nntpVerified = true;
-				
 				/*
 				 * Store the given NNTP settings in the 
 				 * SESSION object, we need it later to update
@@ -307,8 +329,19 @@
 				<td> 
 					<select id='nntpselectbox' name='nntpform[name]' onchange='toggleNntpField();'> 
 	<?php
-					foreach($serverList->usenetservers->server as $server) {
-						echo "<option value='{$server['name']}'" . (($server['name'] == $form['name']) ? "selected='selected'" : '') . ">{$server['name']}</option>";
+					foreach($serverList->usenetservers->server as $provider) {
+						$server = '';
+
+						/* Make sure the server is supported, eg filter out ssl only servers when openssl is not loaded */
+						if (extension_loaded('openssl') && isset($provider->ssl)) {
+							$server = $provider->ssl;
+						} elseif (isset($provider->plain)) {
+							$server = $provider->plain;
+						} # if
+
+						if (!empty($server)) {
+							echo "<option value='{$provider['name']}'" . (($provider['name'] == $form['name']) ? "selected='selected'" : '') . ">{$provider['name']}</option>";
+						} # if
 					} # foreach
 	?>
 						<option value='custom'>Custom</option>
@@ -384,7 +417,7 @@
 				if (!empty($errorList)) {
 					throw new Exception($errorList[0]);
 				} # if
-				
+			
 				/*
 				 * and call the next stage in the setup
 				 */
@@ -491,7 +524,7 @@
 			/*
 			 * Create a private/public key pair for this user
 			 */
-			$spotSigning = new SpotSigning();
+			$spotSigning = Services_Signing_Base::newServiceSigning();
 			$userKey = $spotSigning->createPrivateKey($spotSettings->get('openssl_cnf_path'));
 			$spotUser['publickey'] = $userKey['public'];
 			$spotUser['privatekey'] = $userKey['private'];
@@ -528,7 +561,7 @@
 					break;
 				} # mysql
 
-				case 'postgresql' : {
+				case 'pdo_pgsql' : {
 					$dbConnectionString .= "\$dbsettings['engine'] = 'pdo_pgsql';" . PHP_EOL;
 					$dbConnectionString .= "\$dbsettings['host'] = '" . $_SESSION['spotsettings']['db']['host'] . "';" . PHP_EOL;
 					$dbConnectionString .= "\$dbsettings['dbname'] = '" . $_SESSION['spotsettings']['db']['dbname'] . "';" . PHP_EOL;
@@ -536,7 +569,7 @@
 					$dbConnectionString .= "\$dbsettings['pass'] = '" . $_SESSION['spotsettings']['db']['pass'] . "';" . PHP_EOL;
 
 					break;
-				} # postgresql
+				} # pdo_pgsql 
 			} # switch
 
 			# Try to create the dbsettings.inc.php file for the user
@@ -657,3 +690,5 @@
 		
 		default			: performAndPrintTests(); break;
 	} # switch
+
+	ob_end_flush();

@@ -10,9 +10,23 @@
 	$show_comments = ($settings->get('retrieve_comments') && $tplHelper->allowed(SpotSecurity::spotsec_view_comments, ''));
 	$show_filesize = $currentSession['user']['prefs']['show_filesize'];
 	$show_spamreports = $currentSession['user']['prefs']['show_reportcount'];
+	$minimum_spamreports = $currentSession['user']['prefs']['minimum_reportcount'];
 	$show_nzb_button = ($tplHelper->allowed(SpotSecurity::spotsec_retrieve_nzb, '') && ($currentSession['user']['prefs']['show_nzbbutton']));
 	$show_multinzb_checkbox = ($tplHelper->allowed(SpotSecurity::spotsec_retrieve_nzb, '') && ($currentSession['user']['prefs']['show_multinzb']));
 	$show_mouseover_subcats = ($currentSession['user']['prefs']['mouseover_subcats']);
+	$newCommentCount = array();
+	$noResults = (count($spots) == 0);
+
+	/*
+	 * For Seen, Watched en MyPosted-spots we want to show a list of
+	 * comments users haven't seen yet. We check whether this is such
+	 * a list by checking for the existence of any of these fields
+	 */
+	if (!$noResults) { 
+		if ( (isset($spots[0]['mypostedspot'])) || (isset($spots[0]['myseenspot'])) || (isset($spots[0]['mywatchedspot'])) ) {
+			$newCommentCount = $tplHelper->getNewCommentCountFor($spots);
+		} # if
+	} # if
 ?>
 			<div class="spots">
 				<table class="spots" summary="Spots">
@@ -24,7 +38,7 @@
 							<th class='watch'> </th>
 							<?php }
 							if ($show_comments) {
-								echo "<th class='comments'> <a title='" . _('Number of comment') . "' href='" . $tplHelper->makeToggleSortUrl('index', 'commentcount', 'DESC') . "'>#</a> </th>";
+								echo "<th class='comments'> <a title='" . _('Number of comments') . "' href='" . $tplHelper->makeToggleSortUrl('index', 'commentcount', 'DESC') . "'>#</a> </th>";
 							} # if ?>
 							<th class='genre'> <?php echo _('Genre'); ?> </th> 
 							<th class='poster'> <span class="sortby"><a class="up" href="<?php echo $tplHelper->makeSortUrl('index', 'poster', 'ASC'); ?>" title="<?php echo _('Sort on sender [0-Z]'); ?>"> </a> <a class="down" href="<?php echo $tplHelper->makeSortUrl('index', 'poster', 'DESC'); ?>" title="<?php echo _('Sort on sender [Z-0]'); ?>"> </a></span> <?php echo _('Sender'); ?> </th> 
@@ -50,7 +64,7 @@ if (($tplHelper->allowed(SpotSecurity::spotsec_download_integration, $nzbHandlin
 					</thead>
 					<tbody id="spots">
 <?php
-	if (count($spots) == 0) {
+	if ($noResults) {
 		$colSpan = 5;
 		$nzbHandlingTmp = $currentSession['user']['prefs']['nzbhandling'];
 		if ($show_comments) { $colSpan++; }
@@ -68,6 +82,11 @@ if (($tplHelper->allowed(SpotSecurity::spotsec_download_integration, $nzbHandlin
 		$spot = $tplHelper->formatSpotHeader($spot);
 		$newSpotClass = ($tplHelper->isSpotNew($spot)) ? 'new' : '';
         $tipTipClass = $show_mouseover_subcats ? 'showTipTip' : '';
+		$dateTitleText = $tplHelper->formatDate($spot['stamp'], 'force_spotlist');
+		$commentCountValue = $spot['commentcount'];
+		if (isset($newCommentCount[$spot['messageid']])) {
+			$commentCountValue .= '*';
+		} # if
 
 		$catMap = array();
 		foreach($spot['subcatlist'] as $sub) {
@@ -104,7 +123,7 @@ if (($tplHelper->allowed(SpotSecurity::spotsec_download_integration, $nzbHandlin
 		}
 		
 		$reportSpam = '';
-		if ($show_spamreports && $spot['reportcount'] != 0) {
+		if ($show_spamreports && $spot['reportcount'] >= $minimum_spamreports) {
 			if($spot['reportcount'] == 1) {
 				$reportSpamClass = ' grey';
 			} elseif ($spot['reportcount'] >= 2 && $spot['reportcount'] < 4) {
@@ -122,13 +141,21 @@ if (($tplHelper->allowed(SpotSecurity::spotsec_download_integration, $nzbHandlin
 		echo "<tr class='" . $tplHelper->cat2color($spot);
 		if ($spot['hasbeendownloaded']) {
 			echo " downloadedspot";
-		} # if
+			
+			$dateTitleText .= "\r\n " . _("downloaded on") . ' ' . $tplHelper->formatDate($spot['downloadstamp'], 'force_spotlist');
+ 		} # if
 		if ($spot['hasbeenseen']) {
 			echo " seenspot";
+
+			$dateTitleText .= "\r\n " . _("opened on") . ' ' . $tplHelper->formatDate($spot['seenstamp'], 'force_spotlist');
 		} # if
+		
+		if($tplHelper->isModerated($spot)) {
+		     echo " moderatedspot";
+          } #if 
 		echo "'>";
 		echo "<td class='category'><a href='" . $spot['caturl'] . "' title=\"" . sprintf(_("Go to category '%s'"), $spot['catshortdesc']) . "\">" . $spot['catshortdesc'] . "</a></td>" .
-			 "<td class='title " . $newSpotClass . " ". $tipTipClass . "'><a data-cats='" . $catData. "'onclick='openSpot(this,\"".$spot['spoturl']."\")' href='".$spot['spoturl']."' title='" . $spot['title'] . "' class='spotlink'>" . $reportSpam . $rating . $markSpot . $spot['title'] . "</a></td>";
+			 "<td class='title " . $newSpotClass . " ". $tipTipClass . "'><a data-cats='" . $catData. "' onclick='openSpot(this,\"".$spot['spoturl']."\")' href='".$spot['spoturl']."' title='" . $spot['title'] . "' class='spotlink'>" . $reportSpam . $rating . $markSpot . $spot['title'] . "</a></td>";
 
 		if ($show_watchlist_button) {
 			echo "<td class='watch'>";
@@ -138,12 +165,12 @@ if (($tplHelper->allowed(SpotSecurity::spotsec_download_integration, $nzbHandlin
 		}
 
 		if ($show_comments) {
-			echo "<td class='comments'><a onclick='openSpot(this,\"".$spot['spoturl']."\")' class='spotlink' href='" . $spot['spoturl'] . "#comments' title=\"" . sprintf(_("%d comments on '%s'"), $spot['commentcount'], $spot['title']) . "\">" . $spot['commentcount'] . "</a></td>";
+			echo "<td class='comments'><a onclick='openSpot(this,\"".$spot['spoturl']."\")' class='spotlink' href='" . $spot['spoturl'] . "#comments' title=\"" . sprintf(_("%d comments on '%s'"), $spot['commentcount'], $spot['title']) . "\">" . $commentCountValue . "</a></td>";
 		} # if
 		
 		echo "<td class='genre'><a href='" . $spot['subcaturl'] . "' title='" . sprintf(_('Search spot in category %s'), $spot['catdesc']) . "'>" . $spot['catdesc'] . "</a></td>" .
 			 "<td class='poster'><a href='" . $spot['posterurl'] . "' title='" . sprintf(_('Search spot from %s'), $spot['poster']) . "'>" . $spot['poster'] . "</a></td>" .
-			 "<td class='date' title='" . $tplHelper->formatDate($spot['stamp'], 'force_spotlist') . "'>" . $tplHelper->formatDate($spot['stamp'], 'spotlist') . "</td>";
+			 "<td class='date' title='" . $dateTitleText . "'>" . $tplHelper->formatDate($spot['stamp'], 'spotlist') . "</td>";
 
 		if ($show_filesize) {
 			echo "<td class='filesize'>" . $tplHelper->format_size($spot['filesize']) . "</td>";

@@ -12,7 +12,7 @@
 	$isBlacklisted = ($spot['listidtype'] == 1);
 	$isWhitelisted = ($spot['listidtype'] == 2); 
 	$allow_blackList = (($tplHelper->allowed(SpotSecurity::spotsec_blacklist_spotter, '')) && ($allowedToPost) && (!$isBlacklisted) && (!empty($spot['spotterid'])));
-	$allow_whiteList = (($tplHelper->allowed(SpotSecurity::spotsec_blacklist_spotter, '')) && ($allowedToPost) && (!$isWhitelisted) && (!empty($spot['spotterid'])));
+	$allow_whiteList = (($tplHelper->allowed(SpotSecurity::spotsec_blacklist_spotter, '')) && ($allowedToPost) && (!$isBlacklisted) && (!$isWhitelisted) && (!empty($spot['spotterid'])));
 
 	/* Determine minimal width of the image, we cannot set it in the CSS because we cannot calculate it there */
 	$imgMinWidth = 260;
@@ -176,6 +176,9 @@ if ($tplHelper->allowed(SpotSecurity::spotsec_post_comment, '')) {
 		
 		<input type="hidden" id="messageid" value="<?php echo $spot['messageid'] ?>" />
 		<script type="text/javascript">
+			// Attach an onLoad() listener to the image so we can bring the image into view
+			loadSpotImage();
+
 			$(document).ready(function(){
 				$("#details").addClass("external");
 
@@ -189,7 +192,6 @@ if ($tplHelper->allowed(SpotSecurity::spotsec_post_comment, '')) {
 				postCommentsForm();
 				postReportForm();
 				postBlacklistForm();
-				loadSpotImage();
 				if (spotweb_retrieve_commentsperpage > 0) {
 					loadComments(messageid,spotweb_retrieve_commentsperpage,'0');
 				} // if
@@ -199,5 +201,5 @@ if ($tplHelper->allowed(SpotSecurity::spotsec_post_comment, '')) {
 				document.getElementById(element_id).value += text;
 			}
 		</script>
-<?
+<?php
 require_once "includes/footer.inc.php";

@@ -15,6 +15,12 @@ class dbeng_pdo_pgsql extends dbeng_pdo {
 		$this->_db_user = $user;
 		$this->_db_pass = $pass;
 		$this->_db_db = $db;
+
+		/* 
+		 * arbitrarily chosen because some insert statements might
+		 * be very large.
+		 */
+		$this->_batchInsertChunks = 250;
 	}
 
 	/*
@@ -39,12 +45,15 @@ class dbeng_pdo_pgsql extends dbeng_pdo {
 			} # catch
 
 			$this->_conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+			// Disable standard conforming strings for now as it breaks our code.
+			$this->rawExec('SET standard_conforming_strings=0');
 		} # if
 	} # connect()
 
 	function safe($s) {
 		$search=array("\\","\0","\n","\r","\x1a","'",'"');
-		$replace=array("\\\\","\\0","\\n","\\r","\Z","\'",'\"');
+		$replace=array("\\\\","\\0","\\n","\\r","\Z","\'",'"');
 		return str_replace($search, $replace, $s);
 	} # safe
 
