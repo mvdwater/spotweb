@@ -26,7 +26,7 @@ abstract class Dao_Factory {
 		switch($which) {
 			case 'postgresql'			: return new Dao_Postgresql_Factory(); break;
 			case 'mysql'				: return new Dao_Mysql_Factory(); break;
-			case 'sqlite'				: return new Dao_Sqlite_actory(); break;
+			case 'sqlite'				: return new Dao_Sqlite_Factory(); break;
 
 			default						: throw new Exception("Unknown DAO factory specified");
 		} // switch
