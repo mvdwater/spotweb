@@ -376,9 +376,16 @@ class SpotTemplateHelper {
 			return '';
 		} # if
 		
+		// Find an alternate download url if possible. 
+		// If none exists fallback to the original url.
+		$alternateDownload = new SpotAlternateDownload($spot);
+		if ($alternateDownload->hasUrlForSpot()) {
+		  return $alternateDownload->getUrlForSpot();
+		}
+		
 		return $this->makeBaseUrl("full") . '?page=getnzb&amp;action=display&amp;messageid=' . urlencode($spot['messageid']) . $this->makeApiRequestString();
 	} # makeNzbUrl
-
+  
 	/*
 	 * Creeert een linkje naar retrieve.php
 	 */
