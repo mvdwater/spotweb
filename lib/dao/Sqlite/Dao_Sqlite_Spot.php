@@ -39,12 +39,12 @@ class Dao_Sqlite_Spot extends Dao_Base_Spot {
 		if (empty($sqlFilter)) {
 			$query = "SELECT COUNT(1) FROM spots AS s";
 		} else {
-			$query = "SELECT COUNT(1) FROM spots AS s
-						LEFT JOIN idx_fts_spots AS idx_fts_spots ON idx_fts_spots.rowid = s.rowid
+			$query = "SELECT COUNT(1) FROM spots AS s,
+						idx_fts_spots
 						LEFT JOIN spotsfull AS f ON s.messageid = f.messageid
 						LEFT JOIN spotstatelist AS l ON s.messageid = l.messageid
 						LEFT JOIN spotteridblacklist as bl ON ((bl.spotterid = s.spotterid) AND (bl.ouruserid = -1) AND (bl.idtype = 1))
-						WHERE " . $sqlFilter . " AND (bl.spotterid IS NULL)";
+						WHERE (s.rowid = idx_fts_spots.rowid) AND " . $sqlFilter . " AND (bl.spotterid IS NULL)";
 		} # else
 		$cnt = $this->_conn->singleQuery($query);
 		SpotTiming::stop(__FUNCTION__, array($sqlFilter));
